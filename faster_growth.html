@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>FYSC Faster Growth</title>
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      padding: 0;
+      background-color: transparent;
+      color: #343a40;
+      line-height: 1.2;
+      overflow-x: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .ranking-container {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .channel {
+      background: #ffffff;
+      border: 1px solid #e9ecef;
+      border-radius: 10px;
+      padding: 20px 30px;
+      text-align: center;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+      width: 400px;
+      max-width: 90%;
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      animation: none;
+    }
+    .channel-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .channel-icon {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      margin-bottom: 20px;
+      border: 3px solid #007bff;
+      box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
+    }
+    .channel-name {
+      font-weight: 700;
+      font-size: 2.5em;
+      color: #343a40;
+      margin-bottom: 10px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .subscribers-label {
+        font-size: 1.2em;
+        color: #6c757d;
+        margin-bottom: 5px;
+    }
+    .subscribers {
+        font-size: 4em;
+        font-weight: bolder;
+        color: #007bff;
+    }
+    .subscribers .odometer {
+        font-size: 1em;
+        font-weight: bolder;
+    }
+    .growth-text {
+        font-size: 1.5em;
+        font-weight: bold;
+        color: #28a745;
+        margin-top: 15px;
+    }
+  </style>
+  <link rel="stylesheet" href="odometer-theme-default.min.css">
+  <script src="odometer.min.js"></script>
+</head>
+<body>
+  <div class="ranking-container" id="ranking">
+    </div>
+
+  <script>
+    const API_URL = 'http://localhost:3000';
+    const rankingContainer = document.getElementById('ranking');
+
+    function getChannelIconUrl(userId) {
+      return `http://googleusercontent.com/profile/picture/C{userId}=s88-c-k-c0x00ffffff-no-rj`;
+    }
+
+    async function fetchFasterGrowth() {
+      try {
+        const response = await fetch(`${API_URL}/growth/faster`);
+        const channels = await response.json(); 
+        
+        const sortedChannelArray = channels
+          .filter(ch => (ch.growth ?? 0) > 0)
+          .slice(0, 1);
+
+        rankingContainer.innerHTML = '';
+
+        if (sortedChannelArray.length === 0) {
+            rankingContainer.innerHTML = '<p style="color: #6c757d; font-size: 1.5em;">成長中のチャンネルがありません。</p>';
+            return;
+        }
+
+        const ch = sortedChannelArray[0];
+        const userId = ch.userid;
+        const growth = ch.growth ?? 0;
+        const subscribers = ch.subscribers ?? 0;
+
+        let channelDiv = document.createElement('div');
+        channelDiv.classList.add('channel');
+        channelDiv.id = `channel-${userId}`;
+        
+        channelDiv.innerHTML = `
+          <div class="channel-content">
+            <img class="channel-icon" src="${getChannelIconUrl(userId)}" alt="Channel Icon" onerror="this.onerror=null; this.src='default_icon.png';">
+            <span class="channel-name">${ch.name}</span>
+            <div class="subscribers-label">Subscribers:</div>
+            <div class="subscribers">
+              <span id="subs-${userId}" class="odometer">${subscribers}</span>
+            </div>
+            <div class="growth-text">Growth: +${growth.toLocaleString()}</div>
+          </div>
+        `;
+        
+        rankingContainer.appendChild(channelDiv);
+
+        new Odometer({ el: document.querySelector(`#subs-${userId}`), value: subscribers, format: '(,ddd)', theme: 'default' });
+      
+      } catch (error) {
+        console.error('Failed to fetch faster growth ranking:', error);
+        rankingContainer.innerHTML = '<p style="color: red; text-align: center; margin-top: 50px;">Failed to load growth data.<br>Please check if the server is running or if the API URL is correct.</p>';
+      }
+    }
+
+    fetchFasterGrowth();
+    setInterval(fetchFasterGrowth, 5000);
+  </script>
+</body>
+</html>

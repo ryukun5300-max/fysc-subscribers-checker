@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>FYSC Battle</title>
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: transparent;
+      color: #ffffff;
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      flex-direction: column;
+    }
+    .battle-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 90%;
+      max-width: 1200px;
+    }
+    .channel-box {
+      background: rgba(0, 0, 0, 0.7);
+      border: 2px solid #fff;
+      border-radius: 10px;
+      padding: 20px;
+      margin: 10px;
+      width: 45%;
+      text-align: center;
+      transition: all 0.5s ease;
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+    }
+    .channel-box.left {
+      border-right: none;
+      border-top-right-radius: 0;
+      border-bottom-right-radius: 0;
+    }
+    .channel-box.right {
+      border-left: none;
+      border-top-left-radius: 0;
+      border-bottom-left-radius: 0;
+    }
+    .channel-name {
+      font-size: 2em;
+      font-weight: bold;
+      margin-bottom: 10px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    }
+    .channel-subscribers {
+      font-size: 4em;
+      font-weight: bolder;
+      color: #00ff00;
+      text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.5);
+    }
+    .versus {
+      font-size: 3em;
+      font-weight: bolder;
+      color: #ff0000;
+      margin: 0 20px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    }
+    .odometer {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+  </style>
+  <link rel="stylesheet" href="odometer-theme-default.min.css">
+  <script src="odometer.min.js"></script>
+</head>
+<body>
+  <div class="battle-container">
+    <div class="channel-box left">
+      <div class="channel-name" id="channel-name-1">Channel 1</div>
+      <div class="channel-subscribers">
+        <span id="subs-1" class="odometer">0</span>
+      </div>
+    </div>
+    <div class="versus">VS</div>
+    <div class="channel-box right">
+      <div class="channel-name" id="channel-name-2">Channel 2</div>
+      <div class="channel-subscribers">
+        <span id="subs-2" class="odometer">0</span>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    const API_URL = 'http://localhost:3000';
+    
+    // バトル相手の情報をサーバーから取得するAPIを呼び出す関数
+    async function fetchBattleData() {
+        try {
+            const response = await fetch(`${API_URL}/battle/auto`);
+            if (!response.ok) {
+                throw new Error('サーバーからバトルデータが取得できませんでした。');
+            }
+            const channels = await response.json();
+
+            if (channels.length < 2) {
+                document.getElementById('channel-name-1').textContent = 'チャンネルが不足';
+                document.getElementById('channel-name-2').textContent = 'しています';
+                odometer1.update(0);
+                odometer2.update(0);
+                console.error('Not enough channels for a battle.');
+                return;
+            }
+
+            const channel1 = channels[0];
+            const channel2 = channels[1];
+
+            document.getElementById('channel-name-1').textContent = channel1.name;
+            document.getElementById('channel-name-2').textContent = channel2.name;
+
+            // Odometerのインスタンスを作成・更新
+            if (typeof odometer1 === 'undefined') {
+                window.odometer1 = new Odometer({ el: document.getElementById('subs-1'), value: channel1.subscribers, format: '(,ddd)', theme: 'default' });
+            } else {
+                odometer1.update(channel1.subscribers);
+            }
+
+            if (typeof odometer2 === 'undefined') {
+                window.odometer2 = new Odometer({ el: document.getElementById('subs-2'), value: channel2.subscribers, format: '(,ddd)', theme: 'default' });
+            } else {
+                odometer2.update(channel2.subscribers);
+            }
+
+        } catch (error) {
+            console.error('Failed to fetch battle data:', error);
+        }
+    }
+
+    // ページロード時に一度実行
+    fetchBattleData();
+
+    // 5秒ごとにデータを更新
+    setInterval(fetchBattleData, 5000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>FYSC Ranking TOP 105</title>
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      padding: 0;
+      background-color: transparent;
+      color: #343a40;
+      line-height: 1.2;
+      overflow-x: hidden;
+    }
+    .ranking-container {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    .ranking-column {
+      display: flex;
+      flex-direction: column;
+      width: calc((100% - 30px) / 7);
+      margin-right: 5px;
+    }
+    .ranking-column:last-child {
+      margin-right: 0;
+    }
+    .channel {
+      background: #ffffff;
+      border: 1px solid #e9ecef;
+      border-radius: 0px;
+      padding: 10px 12px;
+      text-align: left;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+      transition: all 0.3s ease-in-out;
+      display: block;
+      margin-bottom: 5px;
+      opacity: 1; /* ★デフォルトを不透明に修正 */
+      transform: translateY(0) scale(1); /* ★デフォルトを修正 */
+      animation: none; /* ★アニメーションを削除 */
+    }
+    .channel-content {
+      display: flex;
+      align-items: center;
+    }
+    .rank {
+      font-weight: bold;
+      color: #007bff;
+      margin-right: 10px;
+      font-size: 1.2em;
+      width: 30px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .channel-info {
+      flex-grow: 1;
+      overflow: hidden;
+    }
+    .channel-name {
+      font-weight: 600;
+      font-size: 0.95em;
+      color: #343a40;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .subscribers {
+      font-size: 1.3em;
+      font-weight: bolder;
+      color: #343a40;
+      display: flex;
+      align-items: baseline;
+      transition: color 0.5s ease-in-out, text-shadow 0.5s ease-in-out;
+    }
+    .subscribers .odometer {
+      margin-right: 0;
+    }
+    .subscribers.glow-green {
+      color: #28a745;
+      text-shadow: 0 0 10px rgba(40, 167, 69, 0.7);
+      animation: glowGreen 1.5s forwards ease-in-out;
+    }
+    @keyframes glowGreen {
+      0% { text-shadow: 0 0 5px rgba(40, 167, 69, 0.7); }
+      50% { text-shadow: 0 0 20px rgba(40, 167, 69, 1); }
+      100% { text-shadow: 0 0 5px rgba(40, 167, 69, 0.7); }
+    }
+    .channel-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      margin-right: 10px;
+      flex-shrink: 0;
+      border: 1px solid #e9ecef;
+    }
+    .fire-flame-icon {
+        width: 1.2em;
+        height: 1.2em;
+        margin-left: 5px;
+        display: none;
+        vertical-align: middle;
+    }
+    .channel.has-fire-gif .fire-flame-icon {
+        display: inline-block;
+    }
+  </style>
+  <link rel="stylesheet" href="odometer-theme-default.min.css">
+  <script src="odometer.min.js"></script>
+</head>
+<body>
+  <div class="ranking-container" id="ranking">
+    </div>
+
+  <script>
+    const API_URL = 'http://localhost:3000';
+    const rankingContainer = document.getElementById('ranking');
+    let initialLoad = true;
+    let prevSubs = {};
+    let odometerInstances = {};
+    let currentChannelElements = {};
+    const columnCount = 7;
+
+    const columns = [];
+    for (let i = 0; i < columnCount; i++) {
+        const columnDiv = document.createElement('div');
+        columnDiv.classList.add('ranking-column');
+        columns.push(columnDiv);
+        rankingContainer.appendChild(columnDiv);
+    }
+
+    function getChannelIconUrl(userId) {
+      return `http://googleusercontent.com/profile/picture/6{userId}=s88-c-k-c0x00ffffff-no-rj`;
+    }
+
+    async function fetchRanking() {
+      try {
+        const response = await fetch(`${API_URL}/channels`);
+        const channels = await response.json(); 
+        
+        const sortedChannelArray = channels
+          .sort((a, b) => (b.subscribers ?? 0) - (a.subscribers ?? 0))
+          .slice(0, 105);
+
+        const fetchedUserIds = new Set();
+
+        for (let i = 0; i < sortedChannelArray.length; i++) {
+          const ch = sortedChannelArray[i];
+          const userId = ch.userid; 
+          const subs = ch.subscribers ?? 0;
+          fetchedUserIds.add(userId);
+
+          const columnIndex = Math.floor(i / 15);
+          if (columnIndex >= columnCount) continue;
+
+          let channelDiv = currentChannelElements[userId];
+          const previousSubs = prevSubs[userId] ?? 0;
+
+          const subscriberIncrease = subs - previousSubs;
+          const hasFireGif = subscriberIncrease >= 250;
+
+          if (channelDiv) {
+            const currentRankElement = channelDiv.querySelector('.rank');
+            if (parseInt(currentRankElement.textContent) !== (i + 1)) {
+              currentRankElement.textContent = i + 1;
+            }
+
+            if (odometerInstances[userId]) {
+              odometerInstances[userId].update(subs);
+            } else {
+              const odometerElement = channelDiv.querySelector(`#subs-${userId}`);
+              if (odometerElement) {
+                odometerInstances[userId] = new Odometer({ el: odometerElement, value: subs, format: '(,ddd)', theme: 'default' });
+              }
+            }
+
+            if (!initialLoad && subs > previousSubs) {
+              const subscribersElement = channelDiv.querySelector('.subscribers');
+              if (subscribersElement) {
+                subscribersElement.classList.add('glow-green');
+                setTimeout(() => {
+                  subscribersElement.classList.remove('glow-green');
+                }, 1500); 
+              }
+            }
+
+            if (hasFireGif) {
+                channelDiv.classList.add('has-fire-gif');
+            } else {
+                channelDiv.classList.remove('has-fire-gif');
+            }
+
+          } else {
+            channelDiv = document.createElement('div');
+            channelDiv.classList.add('channel');
+            channelDiv.id = `channel-${userId}`;
+            
+            channelDiv.innerHTML = `
+              <div class="channel-content">
+                <div class="rank">${i + 1}</div>
+                <img class="channel-icon" src="${getChannelIconUrl(userId)}" alt="Channel Icon" onerror="this.onerror=null; this.src='default_icon.png';">
+                <div class="channel-info">
+                  <span class="channel-name">${ch.name}</span>
+                  <img class="fire-flame-icon" src="fire-flame.gif" alt="Fire Flame">
+                  <div class="subscribers">
+                    <span id="subs-${userId}" class="odometer">${subs}</span>
+                  </div>
+                </div>
+              </div>
+            `;
+            
+            const odometerElement = channelDiv.querySelector(`#subs-${userId}`);
+            if (odometerElement) {
+              odometerInstances[userId] = new Odometer({ el: odometerElement, value: subs, format: '(,ddd)', theme: 'default' });
+            }
+            
+            if (hasFireGif) {
+                channelDiv.classList.add('has-fire-gif');
+            } else {
+                channelDiv.classList.remove('has-fire-gif');
+            }
+          }
+          
+          columns[columnIndex].appendChild(channelDiv);
+          currentChannelElements[userId] = channelDiv;
+          prevSubs[userId] = subs;
+        }
+
+        for (const userId in currentChannelElements) {
+          if (!fetchedUserIds.has(userId)) {
+            if (currentChannelElements[userId].parentNode) {
+              currentChannelElements[userId].parentNode.removeChild(currentChannelElements[userId]);
+            }
+            delete odometerInstances[userId];
+            delete currentChannelElements[userId];
+          }
+        }
+
+      } catch (error) {
+        console.error('Failed to fetch ranking:', error);
+        rankingContainer.innerHTML = '<p style="color: red; text-align: center; margin-top: 50px;">Failed to load ranking data.<br>Please check if the server is running or if the API URL is correct.</p>';
+      } finally {
+        initialLoad = false;
+      }
+    }
+
+    fetchRanking();
+    setInterval(fetchRanking, 5000);
+  </script>
+</body>
+</html>

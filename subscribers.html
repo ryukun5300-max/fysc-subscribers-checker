@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>FYSC Subscribers Checker</title>
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: transparent;
+      color: #343a40;
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      flex-direction: column;
+      text-align: center;
+    }
+    .main-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .search-container {
+        margin-bottom: 20px;
+        width: 100%;
+        max-width: 500px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    #search-input {
+        flex-grow: 1;
+        padding: 10px;
+        border: 1px solid #e9ecef;
+        border-radius: 5px;
+        font-size: 1em;
+    }
+    #search-button {
+        padding: 10px 20px;
+        margin-left: 10px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 1em;
+        transition: background-color 0.2s;
+    }
+    #search-button:hover {
+        background-color: #0056b3;
+    }
+    .search-results-container {
+        background: #ffffff;
+        border: 1px solid #e9ecef;
+        border-radius: 10px;
+        padding: 20px;
+        width: 400px;
+        max-width: 90%;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+        margin-top: 20px;
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    .search-results-container h3 {
+        margin-top: 0;
+        margin-bottom: 10px;
+    }
+    .search-result-item {
+        display: flex;
+        align-items: center;
+        padding: 10px;
+        border-bottom: 1px solid #e9ecef;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    .search-result-item:last-child {
+        border-bottom: none;
+    }
+    .search-result-item:hover {
+        background-color: #f8f9fa;
+    }
+    .search-result-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      margin-right: 10px;
+    }
+    .search-result-name {
+        font-weight: bold;
+    }
+    .channel-info-box {
+      background: #ffffff;
+      border: 1px solid #e9ecef;
+      border-radius: 10px;
+      padding: 30px;
+      width: 400px;
+      max-width: 90%;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+      display: none;
+    }
+    .channel-icon {
+      width: 150px;
+      height: 150px;
+      border-radius: 50%;
+      margin-bottom: 20px;
+      border: 3px solid #007bff;
+      box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
+    }
+    .channel-name {
+      font-size: 2.5em;
+      font-weight: bold;
+      margin-bottom: 15px;
+      color: #343a40;
+    }
+    .subscribers-count {
+      font-size: 4em;
+      font-weight: bolder;
+      color: #007bff;
+    }
+    .odometer {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .error-message {
+      color: red;
+      font-size: 1.2em;
+    }
+  </style>
+  <link rel="stylesheet" href="odometer-theme-default.min.css">
+  <script src="odometer.min.js"></script>
+</head>
+<body>
+  <div class="main-container">
+    <div class="search-container">
+        <input type="text" id="search-input" placeholder="チャンネル名を検索...">
+        <button id="search-button">検索</button>
+    </div>
+    
+    <div class="search-results-container" id="search-results-container" style="display:none;">
+        <h3>検索結果</h3>
+    </div>
+    
+    <div class="channel-info-box" id="channel-info-box">
+      <p>Loading...</p>
+    </div>
+  </div>
+
+  
+  <script>
+    const API_URL = 'http://localhost:3000';
+    const channelInfoBox = document.getElementById('channel-info-box');
+    const searchInput = document.getElementById('search-input');
+    const searchButton = document.getElementById('search-button');
+    const searchResultsContainer = document.getElementById('search-results-container');
+
+    let odometerInstance;
+    let currentUserId = null;
+    let updateInterval = null;
+
+    function getChannelIconUrl(userId) {
+      return `http://googleusercontent.com/profile/picture/A{userId}=s88-c-k-c0x00ffffff-no-rj`;
+    }
+    
+    // チャンネル情報を表示する
+    function displayChannel(channel) {
+        channelInfoBox.innerHTML = `
+          <img class="channel-icon" src="${getChannelIconUrl(channel.userid)}" alt="Channel Icon" onerror="this.onerror=null; this.src='default_icon.png';">
+          <div class="channel-name">${channel.name}</div>
+          <div class="subscribers-count">
+            <span id="subs-count" class="odometer">${channel.subscribers.toLocaleString()}</span>
+          </div>
+        `;
+        channelInfoBox.style.display = 'block';
+        searchResultsContainer.style.display = 'none';
+
+        if (odometerInstance) {
+            odometerInstance.update(channel.subscribers);
+        } else {
+            odometerInstance = new Odometer({ el: document.getElementById('subs-count'), value: channel.subscribers, format: '(,ddd)', theme: 'default' });
+        }
+    }
+
+    // チャンネル情報を取得し、表示を更新する
+    async function fetchSubscribers(userId) {
+      if (!userId) {
+        channelInfoBox.style.display = 'none';
+        return;
+      }
+      try {
+        const response = await fetch(`${API_URL}/channel/${userId}`);
+        
+        if (!response.ok) {
+          throw new Error('Channel not found or server error.');
+        }
+        const channel = await response.json();
+        displayChannel(channel);
+
+      } catch (error) {
+        console.error('Failed to fetch channel data:', error);
+        channelInfoBox.innerHTML = `<p class="error-message">チャンネルが見つかりませんでした。<br>user_idが正しいか確認してください。</p>`;
+        channelInfoBox.style.display = 'block';
+      }
+    }
+    
+    // 検索処理
+    async function searchChannels(query) {
+        if (query.length < 1) {
+            searchResultsContainer.style.display = 'none';
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_URL}/search?query=${encodeURIComponent(query)}`);
+            if (!response.ok) {
+                throw new Error('Search failed.');
+            }
+            const results = await response.json();
+            
+            showSearchResults(results, query);
+        } catch (error) {
+            console.error('Search error:', error);
+            searchResultsContainer.innerHTML = `<p class="error-message">検索中にエラーが発生しました。</p>`;
+        }
+    }
+
+    // 全チャンネル表示
+    async function fetchAllChannels() {
+        try {
+            const response = await fetch(`${API_URL}/channels/all`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch all channels.');
+            }
+            const results = await response.json();
+            showSearchResults(results, 'all channels');
+        } catch (error) {
+            console.error('Error fetching all channels:', error);
+            searchResultsContainer.innerHTML = `<p class="error-message">チャンネルリストの取得中にエラーが発生しました。</p>`;
+        }
+    }
+    
+    // 検索結果を表示する共通関数
+    function showSearchResults(results, queryText) {
+        channelInfoBox.style.display = 'none';
+        searchResultsContainer.style.display = 'block';
+        searchResultsContainer.innerHTML = `<h3>検索結果: "${queryText}"</h3>`;
+
+        if (results.length === 0) {
+            searchResultsContainer.innerHTML += `
+                <p>チャンネルが見つかりませんでした。</p>
+                <button id="show-all-button" style="padding: 8px 15px;">全チャンネルを表示</button>
+            `;
+            document.getElementById('show-all-button').addEventListener('click', fetchAllChannels);
+        } else {
+            results.forEach(ch => {
+                const resultItem = document.createElement('div');
+                resultItem.classList.add('search-result-item');
+                resultItem.innerHTML = `
+                    <img class="search-result-icon" src="${getChannelIconUrl(ch.userid)}" alt="Channel Icon" onerror="this.onerror=null; this.src='default_icon.png';">
+                    <span class="search-result-name">${ch.name}</span>
+                `;
+                resultItem.addEventListener('click', () => {
+                    window.history.pushState({}, '', `?user_id=${ch.userid}`);
+                    setupLiveUpdate(ch.userid);
+                });
+                searchResultsContainer.appendChild(resultItem);
+            });
+        }
+    }
+
+    function setupLiveUpdate(userId) {
+        if (updateInterval) {
+            clearInterval(updateInterval);
+        }
+        currentUserId = userId;
+        fetchSubscribers(currentUserId);
+        updateInterval = setInterval(() => fetchSubscribers(currentUserId), 5000);
+    }
+    
+    // 初期ロード時の処理
+    const userIdFromUrl = new URLSearchParams(window.location.search).get('user_id');
+    if (userIdFromUrl) {
+        setupLiveUpdate(userIdFromUrl);
+    } else {
+        channelInfoBox.style.display = 'none';
+        searchResultsContainer.style.display = 'none';
+    }
+
+    searchButton.addEventListener('click', () => searchChannels(searchInput.value));
+    searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            searchChannels(searchInput.value);
+        }
+    });
+
+    window.addEventListener('popstate', () => {
+        const newUserId = new URLSearchParams(window.location.search).get('user_id');
+        if (newUserId) {
+            setupLiveUpdate(newUserId);
+        } else {
+            if (updateInterval) clearInterval(updateInterval);
+            channelInfoBox.style.display = 'none';
+            searchResultsContainer.style.display = 'none';
+        }
+    });
+  </script>
+</body>
+</html>
